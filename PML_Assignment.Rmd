@@ -1,0 +1,99 @@
+---
+title: "Practical Machine Learning  Assignment"
+author: "Anju Mandal"
+date: "8 March 2019"
+output: html_document
+---
+
+###Summary
+####  Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+### Goal of the Assignment 
+#### The goal of the assignment will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of this project is to predict the manner in which they did the execise using the "classe" variable in the training set. All other variables can be used as predictor.
+####Use the prediction model to predict 20 different test cases.
+
+###Loading the Data
+```{r echo = TRUE}
+  trainingSet <- read.csv("./pml-training.csv",header=T,sep=",",na.strings=c("NA",""))
+  testSet <- read.csv("./pml-testing.csv",header=T,sep=",",na.strings=c("NA",""))
+  dim(trainingSet)
+  dim(testSet)
+  names(trainingSet)
+```
+
+###Data Partition
+####Creating training data and validation data sets 
+```{r echo=TRUE}
+library(caret)
+library(lattice)
+library(ggplot2)
+library(rpart)
+library(randomForest)
+library(ElemStatLearn)
+library(corrplot)
+library(e1071)
+
+set.seed(12345)
+trainingSet <- trainingSet[,-1] # Remove the first column that represents a ID Row
+inTrain = createDataPartition(trainingSet$classe, p=0.60, list=F)
+training = trainingSet[inTrain,]
+validating = trainingSet[-inTrain,]
+```
+
+###Data Cleaning
+#### Data set must first be checked on possibility of columns without data to ensure models are applied properly.
+
+####Remove all the columns that having less than 60% of data filled
+
+```{r echo=TRUE}
+sum((colSums(!is.na(training[,-ncol(training)])) < 0.6*nrow(training)))
+KeepCols <- c((colSums(!is.na(training[,-ncol(training)])) >= 0.6*nrow(training)))
+training   <-  training[,KeepCols]
+validating <- validating[,KeepCols]
+```
+
+###Modeling
+#### In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the execution. Therefore, using the training of the model (Random Forest) for the training data set.
+
+```{r echo = TRUE}
+library(randomForest)
+md_rf <- randomForest(classe~.,data=training)
+md_rf
+```
+
+###Model Evaluation
+####Verification of the variable importance measures as produced by random Forest is as follows:
+```{r echo = TRUE}
+importance(md_rf)
+```
+
+#### Using confusion matrix to check the results
+``` {r echo= TRUE}
+confusionMatrix(predict(md_rf,newdata=validating[,-ncol(validating)]),validating$classe)
+
+```
+
+####checking the accuracy of the model
+```{r echo=TRUE}
+accuracy<-c(as.numeric(predict(md_rf,newdata=validating[,-ncol(validating)])==validating$classe))
+accuracy<-sum(accuracy)*100/nrow(validating)
+accuracy
+```
+
+####Accuracy of the model tested on validating set is 99.85% and the sample error is 0.15%. Thus Random Forest Model is the best fit in this case.
+
+###Applying the Model to the Test data 
+###  Testing loaded earlier needs to cleaned in similar way as training data 
+
+```{r echo = TRUE}
+testSet <- testSet[,-1] # Remove the first column that represents a ID Row
+testSet <- testSet[ ,KeepCols] # Keep the same columns of testing dataset
+testSet <- testSet[,-ncol(testSet)] # Remove the problem ID
+# Coerce testing dataset to same class and structure of training dataset 
+testing <- rbind(training[100, -59] , testSet) 
+# Apply the ID Row to row.names and 100 for dummy row from testing dataset 
+row.names(testing) <- c(100, 1:20)
+#Prediction with the Testing Dataset
+predictions <- predict(md_rf,newdata=testing[-1,])
+predictions
+
+```
